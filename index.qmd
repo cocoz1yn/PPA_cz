@@ -1,10 +1,10 @@
 ---
-title: "MUSA 5080 Portfolio"
+title: "CPLN 5920 Portfolio"
 ---
 
 # Welcome to My Portfolio
 
-This portfolio documents my learning journey in Public Policy Analytics (MUSA 5080).
+This portfolio documents my learning journey in Public Policy Analytics (CPLN 5920).
 
 ## About This Course
 Advanced spatial analysis and data science for urban planning and public policy.
@@ -15,8 +15,8 @@ Advanced spatial analysis and data science for urban planning and public policy.
 - **Final Project:** Capstone modeling challenge
 
 ## About Me
-[My name is Coco Zhou. I am currently a first-year MCP student concentrating in Smart Cities, and you can contact me at ziyanz27@upenn.edu My GitHub username is cocoz1yn. I am taking this course becuase I am intrested in learning more about how to analyze data through a public secter perspective.]
+[My name is Coco Zhou. I am currently a first-year MCP student concentrating in Smart Cities. I am taking this course becuase I am intrested in learning more about how to analyze data through a public secter perspective.]
 
 ## Contact
-- Email: [your.email@upenn.edu]
-- GitHub: [@your-username]
+- Email: [ziyanz27@upenn.edu]
+- GitHub: [@cocoz1yn]
