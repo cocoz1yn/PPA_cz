@@ -15,7 +15,7 @@ Advanced spatial analysis and data science for urban planning and public policy.
 - **Final Project:** Capstone modeling challenge
 
 ## About Me
-[Students will customize this section]
+[My name is Coco Zhou. I am currently a first-year MCP student concentrating in Smart Cities, and you can contact me at ziyanz27@upenn.edu My GitHub username is cocoz1yn. I am taking this course becuase I am intrested in learning more about how to analyze data through a public secter perspective.]
 
 ## Contact
 - Email: [your.email@upenn.edu]
