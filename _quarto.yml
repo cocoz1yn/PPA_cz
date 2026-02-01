@@ -12,6 +12,8 @@ website:
         menu:
           - href: labs/lab_0/lab0_template.qmd
             text: "Lab 0"
+          - href: labs/lab_1/lab1.qmd
+            text: "Lab 1"
 format:
   html:
     theme: cosmo
