@@ -145,6 +145,8 @@ income_reliability_summary <- income_reliability %>%
     percent = (n / sum(n)) * 100
   )
 
+income_reliability_summary
+
 # Hint: use count() and mutate() to add percentages
 ```
 
