@@ -245,21 +245,6 @@ race_vars <- c(
   hispanic_latino = "B03002_012"
 )
 # Use get_acs() to retrieve tract-level data
-selected_counties <- income_reliability %>%
-  filter(income_reliability %in% c("High Confidence", "Moderate Confidence", "Low Confidence")) %>%
-  group_by(income_reliability) %>%
-  slice_max(income_moe_pct, n = 1) %>%
-  ungroup() %>%
-  select(
-    GEOID,                     # ← keep this!
-    county = NAME,
-    median_income = median_incomeE,
-    moe_percent = income_moe_pct,
-    reliability_category = income_reliability
-  )
-county_codes <- selected_counties %>%
-  mutate(county_code = str_sub(GEOID, 3, 5)) %>%
-  pull(county_code)
 # Hint: You may need to specify county codes in the county parameter
 tract_data <- get_acs(
   geography = "tract",
@@ -270,7 +255,7 @@ tract_data <- get_acs(
     hispanic_latino = "B03002_012"
   ),
   state = my_state,
-  county = county_codes,
+  county = c("009", "051", "049"),    #County codes from previous table
   year = 2022,
   survey = "acs5",
   output = "wide"
@@ -289,7 +274,7 @@ tract_data <- tract_data %>%
   mutate(
     county_fips = str_sub(GEOID, 3, 5),
     tract_code = str_sub(GEOID, 6, 11),
-    county_name = str_extract(NAME, "^[^,]+")  
+    county_name = str_extract(NAME, "(?<=; )[^;]+(?=County)")  
   )
 
 # Add readable tract and county name columns using str_extract() or similar
@@ -308,6 +293,7 @@ top_hispanic_tract <- tract_data %>%
   arrange(desc(pct_hispanic)) %>%
   slice(1) %>%
   select(NAME, GEOID, county_fips, tract_code, total_populationE, pct_white, pct_black, pct_hispanic)
+
 # Hint: use arrange() and slice() to get the top tract
 top_hispanic_tract %>%
   kable(
@@ -330,6 +316,7 @@ county_demographics_summary <- tract_data %>%
     avg_pct_black = round(avg_pct_black, 2),
     avg_pct_hispanic = round(avg_pct_hispanic, 2)
   )
+
 # Show: number of tracts, average percentage for each racial/ethnic group
 county_demographics_summary %>%
   kable(
@@ -375,15 +362,19 @@ tract_data <- tract_data %>%
       FALSE
     )
   )
+
 # Use logical operators (| for OR) in an ifelse() statement
 
 # Create summary statistics showing how many tracts have data quality issues
 demo_moe_summary <- tract_data %>%
+  group_by(county_name) %>%
   summarize(
     total_tracts = n(),
     tracts_high_moe = sum(high_demo_moe, na.rm = TRUE),
     percent_high_moe = (tracts_high_moe / total_tracts) * 100
   )
+
+demo_moe_summary
 ```
 
 ## 4.2 Pattern Analysis
@@ -392,40 +383,42 @@ demo_moe_summary <- tract_data %>%
 
 ```{r pattern-analysis}
 # Group tracts by whether they have high MOE issues
-pattern_summary <- tract_data %>%
-  group_by(high_demo_moe) %>%
+
+# Due to previous results which reflects all high percentages in MOE, the data is now classified as any demographic that has MOE > 15% but individually selected
+tract_data1 <- tract_data %>%
+  mutate(
+    high_white = white_moe_pct >15,
+    high_black = black_moe_pct >15,
+    high_hispanic = hispanic_moe_pct >15,
+    high_count = high_white + high_black + high_hispanic,
+    severity = case_when(
+      high_count == 3 ~ "High",
+      high_count == 2 ~ "Moderate",
+      TRUE ~ "Low"
+    )
+  )
  
 # Calculate average characteristics for each group:
-   summarize(
-    number_of_tracts = n(),
-    avg_total_population = mean(total_populationE, na.rm = TRUE),
-    avg_pct_white = mean(pct_white, na.rm = TRUE),
-    avg_pct_black = mean(pct_black, na.rm = TRUE),
-    avg_pct_hispanic = mean(pct_hispanic, na.rm = TRUE)
-  ) %>%
-
+pattern_tbl <- tract_data1 %>%
+  group_by(severity) %>%
+  summarise(
+    n_tract = n(),
+    pop = mean(total_populationE, na.rm = TRUE),
+    avg_white = weighted.mean(pct_white, total_populationE, na.rm = TRUE),
+    avg_black = weighted.mean(pct_black, total_populationE, na.rm = TRUE),
+    avg_hispanic = weighted.mean(pct_hispanic, total_populationE, na.rm = TRUE),
+  )
 
 # - population size, demographic percentages
- mutate(
-    avg_total_population = round(avg_total_population, 0),
-    avg_pct_white = round(avg_pct_white, 2),
-    avg_pct_black = round(avg_pct_black, 2),
-    avg_pct_hispanic = round(avg_pct_hispanic, 2)
-  )
+
+
 # Use group_by() and summarize() to create this comparison
 # Create a professional table showing the patterns
-pattern_summary %>%
-  kable(
-    col.names = c(
-      "High MOE Issue",
-      "Number of Tracts",
-      "Avg Total Population",
-      "Avg % White",
-      "Avg % Black",
-      "Avg % Hispanic/Latino"
-    ),
-    caption = "Comparison of Tracts With and Without High Demographic MOE Issues"
-  )
+kable(pattern_tbl, 
+      align = c("l","l","l","l","l"), 
+      col.names = c("Severity", "Tracts Number", "Average Population", "Average White Proportion", "Average Black Proportion", "Average Hispanic Proportion"),
+      caption = "Pattern of tarcts with different severity of MOE issues")
+
 ```
 
 **Pattern Analysis:** The results suggest that demographic data quality issues are not randomly distributed across tracts. Tracts with high demographic MOE tend to have smaller average populations and differ in racial and ethnic composition compared to tracts with more reliable data. These patterns likely reflect lower survey sample sizes and higher population variability in certain communities, which increases uncertainty in ACS estimates.
@@ -445,7 +438,7 @@ pattern_summary %>%
 
 **Executive Summary:**
 
-Counties and census tracts with smaller populations and uneven demographic distributions tend to exhibit higher margins of error, particularly for income and race and ethnicity variables. At the tract level, demographic MOE issues were widespread across the selected counties, indicating that uncertainty is concentrated in specific types of communities rather than being randomly distributed. As a result, communities most vulnerable to algorithmic bias are those with less reliable demographic and income estimates, especially smaller-population tracts and areas where minority populations are represented by relatively small counts. Because algorithmic decision-making systems often rely on these variables to allocate resources or classify need, high levels of uncertainty increase the risk of misclassification and inequitable outcomes. These data quality challenges are primarily driven by structural features of survey-based data collection, including limited sample sizes, population sparsity, and high variability within small geographic units. To mitigate these risks, departments should incorporate data quality metrics, such as margins of error, directly into analytic workflows rather than relying solely on point estimates, and apply caution thresholds when making decisions in high-uncertainty areas.
+Counties and census tracts with smaller populations and uneven/ more POC demographic distributions tend to exhibit higher margins of error, particularly for income and race and ethnicity variables. At the tract level, demographic MOE issues were widespread across the selected counties, indicating that uncertainty is concentrated in specific types of communities rather than being randomly distributed. As a result, communities most vulnerable to algorithmic bias are those with less reliable demographic and income estimates, especially smaller-population tracts and areas where minority populations are represented by relatively small counts. Because algorithmic decision-making systems often rely on these variables to allocate resources or classify need, high levels of uncertainty increase the risk of misclassification and inequitable outcomes. These data quality challenges are primarily driven by structural features of survey-based data collection, including limited sample sizes, population sparsity, and high variability within small geographic units. To mitigate these risks, departments should incorporate data quality metrics, such as margins of error, directly into analytic workflows rather than relying solely on point estimates, and apply caution thresholds when making decisions in high-uncertainty areas.
 
 ## 6.3 Specific Recommendations
 
