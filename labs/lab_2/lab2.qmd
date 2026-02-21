@@ -1,0 +1,885 @@
+---
+title: "Lab 2: Spatial Analysis and Visualization"
+subtitle: "Healthcare Access and Equity in Pennsylvania"
+author: "Coco Zhou"
+date: February 17, 2026
+format: 
+  html:
+    code-fold: false
+    toc: true
+    toc-location: left
+    theme: cosmo
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+## Assignment Overview
+
+**Learning Objectives:**
+- Apply spatial operations to answer policy-relevant research questions
+- Integrate census demographic data with spatial analysis
+- Create publication-quality visualizations and maps
+- Work with spatial data from multiple sources
+- Communicate findings effectively for policy audiences
+
+---
+
+## Part 1: Healthcare Access for Vulnerable Populations
+
+### Research Question
+
+**Which Pennsylvania counties have the highest proportion of vulnerable populations (elderly + low-income) living far from hospitals?**
+
+Your analysis should identify counties that should be priorities for healthcare investment and policy intervention.
+
+### Required Analysis Steps
+
+Complete the following analysis, documenting each step with code and brief explanations:
+
+#### Step 1: Data Collection (5 points)
+
+Load the required spatial data:
+- Pennsylvania county boundaries
+- Pennsylvania hospitals (from lecture data)
+- Pennsylvania census tracts
+
+**Your Task:**
+```{r load_data, message=FALSE, warning=FALSE}
+# Load required packages
+library(sf)
+library(tidyverse)
+library(tigris)
+library(tidycensus)
+library(scales)
+library(patchwork)
+library(here)
+
+# Load spatial data
+pa_counties <- st_read("data/Pennsylvania_County_Boundaries.shp")
+districts <- st_read("data/districts.geojson")
+hospitals <- st_read("data/hospitals.geojson")
+census_tracts <- st_read ("data/PA_Census_Tracts_2020.geojson")
+
+# Check that all data loaded correctly
+st_crs(counties)
+
+nrow(hospitals)  
+st_crs(hospitals)
+
+nrow(tracts)    
+st_crs(tracts) 
+
+```
+
+**Questions to answer:**
+- How many hospitals are in your dataset?
+223 hospitals
+- How many census tracts?
+3445 census tracts
+- What coordinate reference system is each dataset in?
+EPSG:4326 (WGS 84)
+
+---
+
+#### Step 2: Get Demographic Data 
+
+Use `tidycensus` to download tract-level demographic data for Pennsylvania.
+
+**Required variables:**
+- Total population
+- Median household income
+- Population 65 years and over (you may need to sum multiple age categories)
+
+**Your Task:**
+```{r}
+# Get demographic data from ACS
+library(dplyr)
+library(tidyr)
+library(sf)
+
+male_65_vars   <- paste0("B01001_0", 20:25)
+female_65_vars <- paste0("B01001_0", 44:49)
+vars_65 <- c(male_65_vars, female_65_vars)
+
+vars_65_named <- setNames(vars_65, vars_65)
+
+acs_pa_long <- get_acs(
+  geography = "tract",
+  state = "PA",
+  year = 2024,
+  survey = "acs5",
+  variables = c(
+    total_pop = "B01003_001",
+    med_income = "B19013_001",
+    vars_65_named
+  ),
+  geometry = FALSE,
+  cache_table = TRUE
+)
+
+# Join to tract boundaries
+acs_pa <- acs_pa_long %>%
+  select(GEOID, NAME, variable, estimate) %>%
+  pivot_wider(names_from = variable, values_from = estimate) %>%
+  mutate(
+    pop_65_over = rowSums(select(., all_of(vars_65)), na.rm = TRUE)
+  ) %>%
+  select(GEOID, NAME, total_pop, med_income, pop_65_over)
+
+census_tracts <- census_tracts %>%
+  mutate(GEOID = as.character(GEOID))
+
+acs_pa <- acs_pa %>%
+  mutate(GEOID = as.character(GEOID))
+
+pa_tracts_demo <- census_tracts %>%
+  left_join(acs_pa, by = "GEOID")
+
+# check
+nrow(pa_tracts_demo)                         
+sum(is.na(pa_tracts_demo$med_income))        
+median(pa_tracts_demo$med_income, na.rm=TRUE)
+
+```
+
+**Questions to answer:**
+- What year of ACS data are you using?
+2024 ACS 5-year estimates
+- How many tracts have missing income data?
+68 census tracts have missing median income data.
+- What is the median income across all PA census tracts?
+The median household income across all Pennsylvania census tracts is $74,844
+
+---
+
+#### Step 3: Define Vulnerable Populations 
+
+Identify census tracts with vulnerable populations based on TWO criteria:
+1. Low median household income (choose an appropriate threshold)
+2. Significant elderly population (choose an appropriate threshold)
+
+**Your Task:**
+```{r}
+# Filter for vulnerable tracts based on your criteria
+pa_tracts_demo <- pa_tracts_demo %>%
+  mutate(
+    pct_65_over = pop_65_over / total_pop
+  )
+
+income_threshold  <- quantile(pa_tracts_demo$med_income, 0.25, na.rm = TRUE)
+elderly_threshold <- quantile(pa_tracts_demo$pct_65_over, 0.75, na.rm = TRUE)
+
+vulnerable_tracts <- pa_tracts_demo %>%
+  filter(
+    med_income <= income_threshold &
+    pct_65_over >= elderly_threshold
+  )
+
+# How many tracts meet criteria?
+n_vulnerable <- nrow(vulnerable_tracts)
+
+# Percent of PA tracts
+percent_vulnerable <- (n_vulnerable / nrow(pa_tracts_demo)) * 100
+
+```
+
+**Questions to answer:**
+- What income threshold did you choose and why?
+I defined low income as census tracts below the 25th percentile of median household income across Pennsylvania.Because it identifies the lowest-income quartile rather than using an arbitrary cutoff
+- What elderly population threshold did you choose and why?
+I defined significant elderly population as tracts above the 75th percentile of residents aged 65 and over. This captures areas with relatively high concentrations of elderly residents compared to the state distribution.
+- How many tracts meet your vulnerability criteria?
+156 tracts
+- What percentage of PA census tracts are considered vulnerable by your definition?
+4.53%
+
+---
+
+#### Step 4: Calculate Distance to Hospitals 
+
+For each vulnerable tract, calculate the distance to the nearest hospital.
+
+**Your Task:**
+```{r}
+# Transform to appropriate projected CRS
+vulnerable_proj <- st_transform(vulnerable_tracts, 2272)
+hospitals_proj  <- st_transform(hospitals, 2272)
+
+tract_centroids <- st_centroid(vulnerable_proj)
+
+
+# Calculate distance from each tract centroid to nearest hospital
+
+dist_matrix <- st_distance(tract_centroids, hospitals_proj)
+
+min_dist_ft <- apply(dist_matrix, 1, min)
+
+min_dist_miles <- as.numeric(min_dist_ft) / 5280
+
+vulnerable_proj$dist_to_hospital_mi <- min_dist_miles
+
+#check
+mean(vulnerable_proj$dist_to_hospital_mi)
+max(vulnerable_proj$dist_to_hospital_mi)
+sum(vulnerable_proj$dist_to_hospital_mi > 15)
+
+```
+
+**Requirements:**
+- Use an appropriate projected coordinate system for Pennsylvania
+- Calculate distances in miles
+- Explain why you chose your projection
+
+**Questions to answer:**
+- What is the average distance to the nearest hospital for vulnerable tracts?
+4.62 miles
+- What is the maximum distance?
+19.47 miles
+- How many vulnerable tracts are more than 15 miles from the nearest hospital?
+10
+
+I transformed the data to NAD83, which is Pennsylvania South (EPSG:2272), becuase it is a State Plane coordinate system designed for Pennsylvania. This projection preserves distance measurements in feet, making it appropriate for converting and calculating  distances. Geographic coordinate systems such as WGS84 are unsuitable for distance calculations because their units are in degrees rather than linear distance.
+
+---
+
+#### Step 5: Identify Underserved Areas 
+
+Define "underserved" as vulnerable tracts that are more than 15 miles from the nearest hospital.
+
+**Your Task:**
+```{r}
+# Create underserved variable
+vulnerable_proj <- vulnerable_proj %>%
+  mutate(
+    underserved = dist_to_hospital_mi > 15
+  )
+
+#how many underserved
+n_underserved <- sum(vulnerable_proj$underserved)
+n_underserved
+
+percent_underserved <- 
+  (n_underserved / nrow(vulnerable_proj)) * 100
+
+round(percent_underserved, 2)
+
+
+
+```
+
+**Questions to answer:**
+- How many tracts are underserved?
+10 vulnerable tracts are located more than 15 miles from the nearest hospital
+- What percentage of vulnerable tracts are underserved?
+6.41% of vulnerable tracts are classified as underserved under this definition.
+- Does this surprise you? Why or why not?
+It is notable that some tracts are located more than 14 miles from the nearest hospital. These areas are likely rural and less densely developed, which may contribute to reduced access to healthcare services.
+
+---
+
+#### Step 6: Aggregate to County Level
+
+Use spatial joins and aggregation to calculate county-level statistics about vulnerable populations and hospital access.
+
+**Your Task:**
+```{r}
+# Spatial join tracts to counties
+counties_proj <- st_transform(pa_counties, st_crs(vulnerable_proj))
+vuln_with_county <- st_join(vulnerable_proj, counties_proj, join = st_within)
+
+
+# Aggregate statistics by county
+county_stats <- vuln_with_county %>%
+  st_drop_geometry() %>%
+  group_by(NAMELSADCO) %>%
+  summarise(
+    vulnerable_tracts = n(),
+    underserved_tracts = sum(underserved, na.rm = TRUE),
+    pct_underserved = 100 * underserved_tracts / vulnerable_tracts,
+    avg_dist_miles = mean(dist_to_hospital_mi, na.rm = TRUE),
+    total_vulnerable_pop = sum(total_pop, na.rm = TRUE)
+  ) %>%
+  arrange(desc(pct_underserved))
+
+
+```
+
+**Required county-level statistics:**
+- Number of vulnerable tracts
+- Number of underserved tracts  
+- Percentage of vulnerable tracts that are underserved
+- Average distance to nearest hospital for vulnerable tracts
+- Total vulnerable population
+
+**Questions to answer:**
+- Which 5 counties have the highest percentage of underserved vulnerable tracts?
+Bradford, Huntingdon, Cameron, Dauphin, Wayne
+- Which counties have the most vulnerable people living far from hospitals?
+Dauphin County
+- Are there any patterns in where underserved counties are located?
+Counties with higher shares of underserved vulnerable tracts tend to be more rural and lower-density, where hospitals are more dispersed and travel distances are longer compared to metropolitan counties.
+
+---
+
+#### Step 7: Create Summary Table 
+
+Create a professional table showing the top 10 priority counties for healthcare investment.
+
+**Your Task:**
+```{r}
+# Create and format priority counties table
+library(knitr)
+library(scales)
+
+
+top10_priority <- county_stats %>%
+  arrange(desc(pct_underserved)) %>%
+  slice(1:10) %>%
+  mutate(
+    `County` = NAMELSADCO,  
+    `Vulnerable Tracts` = vulnerable_tracts,
+    `Underserved Tracts` = underserved_tracts,
+    `Percent Underserved (%)` = round(pct_underserved, 2),
+    `Average Distance (miles)` = round(avg_dist_miles, 2),
+    `Total Vulnerable Population` = comma(total_vulnerable_pop)
+  ) %>%
+  select(
+    County,
+    `Vulnerable Tracts`,
+    `Underserved Tracts`,
+    `Percent Underserved (%)`,
+    `Average Distance (miles)`,
+    `Total Vulnerable Population`
+  )
+
+# Formatted table
+kable(
+  top10_priority,
+  caption = "Top 10 Priority Counties for Healthcare Investment Based on Percentage of Underserved Vulnerable Tracts",
+  align = "lccccc"
+)
+
+```
+
+**Requirements:**
+- Use `knitr::kable()` or similar for formatting
+- Include descriptive column names
+- Format numbers appropriately (commas for population, percentages, etc.)
+- Add an informative caption
+- Sort by priority (you decide the metric)
+
+---
+
+## Part 2: Comprehensive Visualization 
+
+Using the skills from Week 3 (Data Visualization), create publication-quality maps and charts.
+
+### Map 1: County-Level Choropleth 
+
+Create a choropleth map showing healthcare access challenges at the county level.
+
+**Your Task:**
+```{r}
+# Create county-level access map
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(stringr)
+
+county_stats_clean <- county_stats %>%
+  rename(COUNTY_NAM = NAMELSADCO) %>%
+  mutate(
+    county_key = COUNTY_NAM %>%
+      str_remove("\\s+County$") %>%
+      str_trim() %>%
+      str_to_upper()
+  ) %>%
+  st_drop_geometry()
+
+name_col <- intersect(
+  c("COUNTY_NAM","NAMELSAD","NAME","NAME10","COUNTYNAME","COUNTY"),
+  names(pa_counties)
+)[1]
+
+pa_counties_clean <- pa_counties %>%
+  mutate(
+    county_key = .data[[name_col]] %>%
+      str_remove("\\s+County$") %>%
+      str_trim() %>%
+      str_to_upper()
+  )
+
+#Join
+counties_map <- pa_counties_clean %>%
+  left_join(county_stats_clean, by = "county_key")
+
+counties_map <- counties_map %>%
+  mutate(pct_underserved = as.numeric(pct_underserved))
+
+cat("Counties total:", nrow(counties_map), "\n")
+cat("pct_underserved NA:", sum(is.na(counties_map$pct_underserved)), "\n")
+cat("pct_underserved range:", paste(range(counties_map$pct_underserved, na.rm = TRUE), collapse = " to "), "\n")
+
+# Hospitals CRS match
+hospitals_map <- st_transform(hospitals, st_crs(counties_map))
+
+#Plot
+ggplot() +
+  geom_sf(data = counties_map, aes(fill = pct_underserved), color = "white", linewidth = 0.2) +
+  geom_sf(data = hospitals_map, color = "black", size = 1.2, alpha = 0.75) +
+  scale_fill_viridis_c(
+    name = "Underserved vulnerable tracts (%)",
+    labels = label_percent(scale = 1),   
+    na.value = "grey90",
+    option = "C",
+    direction = -1
+  ) +
+  labs(
+    title = "Healthcare Access Challenges in Pennsylvania",
+    subtitle = "Counties shaded by % of vulnerable tracts classified as underserved (distance > 15 miles); hospitals shown as points",
+    caption = "Source: ACS 2020–2024 (5-year) via tidycensus; hospital locations from course dataset. Underserved = vulnerable tracts > 15 miles from nearest hospital."
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 10),
+    plot.caption = element_text(size = 8)
+  )
+
+
+```
+
+**Requirements:**
+- Fill counties by percentage of vulnerable tracts that are underserved
+- Include hospital locations as points
+- Use an appropriate color scheme
+- Include clear title, subtitle, and caption
+- Use `theme_void()` or similar clean theme
+- Add a legend with formatted labels
+
+---
+
+### Map 2: Detailed Vulnerability Map 
+
+Create a map highlighting underserved vulnerable tracts.
+
+**Your Task:**
+```{r}
+# Create detailed tract-level map
+target_crs <- st_crs(vulnerable_proj)
+
+tracts_map   <- st_transform(pa_tracts_demo, target_crs)
+counties_map <- st_transform(pa_counties, target_crs)
+hosp_map     <- st_transform(hospitals, target_crs)
+
+vuln_all <- vulnerable_proj
+underserved_tracts <- vuln_all %>% filter(underserved == TRUE)
+vulnerable_not_underserved <- vuln_all %>% filter(underserved == FALSE)
+
+ggplot() +
+  # Background
+  geom_sf(data = tracts_map, fill = "grey92", color = NA) +
+
+  # County boundaries for context
+  geom_sf(data = counties_map, fill = NA, color = "white", linewidth = 0.4) +
+
+  # Vulnerable but not underserved (soft highlight)
+  geom_sf(data = vulnerable_not_underserved, fill = "grey70", color = NA, alpha = 0.7) +
+
+  # Underserved vulnerable tracts (strong highlight)
+  geom_sf(data = underserved_tracts, fill = "red3", color = "white", linewidth = 0.2) +
+
+  # Hospitals on top
+  geom_sf(data = hosp_map, color = "black", size = 0.8, alpha = 0.8) +
+
+  labs(
+    title = "Underserved Vulnerable Census Tracts in Pennsylvania",
+    subtitle = "Underserved = vulnerable tracts located more than 15 miles from the nearest hospital",
+    caption = "Background tracts shown for context; county boundaries and hospital locations overlaid."
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 10),
+    plot.caption = element_text(size = 8)
+  )
+
+
+```
+
+**Requirements:**
+- Show underserved vulnerable tracts in a contrasting color
+- Include county boundaries for context
+- Show hospital locations
+- Use appropriate visual hierarchy (what should stand out?)
+- Include informative title and subtitle
+
+---
+
+### Chart: Distribution Analysis
+
+Create a visualization showing the distribution of distances to hospitals for vulnerable populations.
+
+**Your Task:**
+```{r}
+# Create distribution visualization
+library(ggplot2)
+
+ggplot(vulnerable_proj, aes(x = dist_to_hospital_mi)) +
+  geom_histogram(aes(y = ..density..),
+                 bins = 25,
+                 fill = "steelblue",
+                 color = "white",
+                 alpha = 0.7) +
+  geom_density(color = "darkblue", linewidth = 1) +
+  labs(
+    title = "Distribution of Distance to Nearest Hospital",
+    subtitle = "Among Vulnerable Census Tracts in Pennsylvania",
+    x = "Distance to Nearest Hospital (miles)",
+    y = "Density",
+    caption = "Distances calculated from tract centroids to nearest hospital using projected CRS."
+  ) +
+  theme_minimal()
+
+```
+
+**Suggested chart types:**
+- Histogram or density plot of distances
+- Box plot comparing distances across regions
+- Bar chart of underserved tracts by county
+- Scatter plot of distance vs. vulnerable population size
+
+**Requirements:**
+- Clear axes labels with units
+- Appropriate title
+- Professional formatting
+- Brief interpretation (1-2 sentences as a caption or in text)
+The distribution of distances is strongly right-skewed, indicating that most vulnerable census tracts are located within approximately 5 miles of a hospital. However, a smaller subset of tracts experience substantially greater travel distances, extending beyond 15 miles. These long-distance tracts correspond to the underserved areas identified in the spatial analysis and are likely concentrated in more rural regions of the state.
+
+---
+
+## Part 3: Bring Your Own Data Analysis 
+
+Choose your own additional spatial dataset and conduct a supplementary analysis.
+
+### Challenge Options
+
+Choose ONE of the following challenge exercises, or propose your own research question using OpenDataPhilly data (https://opendataphilly.org/datasets/). 
+
+**Note these are just loose suggestions to spark ideas - follow or make your own as the data permits and as your ideas evolve. This analysis should include bringing in your own dataset, ensuring the projection/CRS of your layers align and are appropriate for the analysis (not lat/long or geodetic coordinate systems). The analysis portion should include some combination of spatial and attribute operations to answer a relatively straightforward question**
+
+---
+
+#### Education & Youth Services
+
+**Option A: Educational Desert Analysis**
+- **Data:** Schools, Libraries, Recreation Centers, Census tracts (child population)
+- **Question:** "Which neighborhoods lack adequate educational infrastructure for children?"
+- **Operations:** Buffer schools/libraries (0.5 mile walking distance), identify coverage gaps, overlay with child population density
+- **Policy relevance:** School district planning, library placement, after-school program siting
+
+**Option B: School Safety Zones**
+- **Data:** Schools, Crime Incidents, Bike Network
+- **Question:** "Are school zones safe for walking/biking, or are they crime hotspots?"
+- **Operations:** Buffer schools (1000ft safety zone), spatial join with crime incidents, assess bike infrastructure coverage
+- **Policy relevance:** Safe Routes to School programs, crossing guard placement
+
+---
+
+#### Environmental Justice
+
+**Option C: Green Space Equity** 
+- **Data:** Parks, Street Trees, Census tracts (race/income demographics)
+- **Question:** "Do low-income and minority neighborhoods have equitable access to green space?"
+- **Operations:** Buffer parks (10-minute walk = 0.5 mile), calculate tree canopy or park acreage per capita, compare by demographics
+- **Policy relevance:** Climate resilience, environmental justice, urban forestry investment
+---
+
+#### Public Safety & Justice
+
+**Option D: Crime & Community Resources**
+- **Data:** Crime Incidents, Recreation Centers, Libraries, Street Lights
+- **Question:** "Are high-crime areas underserved by community resources?"
+- **Operations:** Aggregate crime counts to census tracts or neighborhoods, count community resources per area, spatial correlation analysis
+- **Policy relevance:** Community investment, violence prevention strategies
+---
+
+#### Infrastructure & Services
+
+**Option E: Polling Place Accessibility**
+- **Data:** Polling Places, SEPTA stops, Census tracts (elderly population, disability rates)
+- **Question:** "Are polling places accessible for elderly and disabled voters?"
+- **Operations:** Buffer polling places and transit stops, identify vulnerable populations, find areas lacking access
+- **Policy relevance:** Voting rights, election infrastructure, ADA compliance
+
+---
+
+#### Health & Wellness
+
+**Option F: Recreation & Population Health**
+- **Data:** Recreation Centers, Playgrounds, Parks, Census tracts (demographics)
+- **Question:** "Is lack of recreation access associated with vulnerable populations?"
+- **Operations:** Calculate recreation facilities per capita by neighborhood, buffer facilities for walking access, overlay with demographic indicators
+- **Policy relevance:** Public health investment, recreation programming, obesity prevention
+
+---
+
+#### Emergency Services
+
+**Option G: EMS Response Coverage**
+- **Data:** Fire Stations, EMS stations, Population density, High-rise buildings
+- **Question:** "Are population-dense areas adequately covered by emergency services?"
+- **Operations:** Create service area buffers (5-minute drive = ~2 miles), assess population coverage, identify gaps in high-density areas
+- **Policy relevance:** Emergency preparedness, station siting decisions
+
+---
+
+#### Arts & Culture
+
+**Option H: Cultural Asset Distribution**
+- **Data:** Public Art, Museums, Historic sites/markers, Neighborhoods
+- **Question:** "Do all neighborhoods have equitable access to cultural amenities?"
+- **Operations:** Count cultural assets per neighborhood, normalize by population, compare distribution across demographic groups
+- **Policy relevance:** Cultural equity, tourism, quality of life, neighborhood identity
+
+---
+
+### Data Sources
+
+**OpenDataPhilly:** https://opendataphilly.org/datasets/
+- Most datasets available as GeoJSON, Shapefile, or CSV with coordinates
+- Always check the Metadata for a data dictionary of the fields.
+
+**Additional Sources:**
+- **Pennsylvania Open Data:** https://data.pa.gov/
+- **Census Bureau (via tidycensus):** Demographics, economic indicators, commute patterns
+- **TIGER/Line (via tigris):** Geographic boundaries
+
+### Recommended Starting Points
+
+**If you're feeling confident:** Choose an advanced challenge with multiple data layers. 
+**If you are a beginner, choose something more manageable that helps you understand the basics**
+
+
+**If you have a different idea:** Propose your own question! Just make sure:
+- You can access the spatial data
+- You can perform at least 2 spatial operations
+
+### Your Analysis
+
+**Your Task:**
+
+1. **Find and load additional data**
+   - Document your data source
+   - Check and standardize the CRS
+   - Provide basic summary statistics
+
+```{r load_packages, message=FALSE, warning=FALSE}
+# Load your additional dataset
+library(ggplot2)
+library(httr)
+library(jsonlite)
+
+schools <- st_read("data/Schools.shp")
+bike <- st_read("data/Bike_Network.shp")
+
+# As suggested on the OpenDataPhilly website, uses Carto’s SQL API to retrieve data 
+read_carto_geojson <- function(sql) {
+  base <- "https://phl.carto.com/api/v2/sql"
+  url <- paste0(base, "?q=", URLencode(sql, reserved = TRUE), "&format=GeoJSON")
+  st_read(url, quiet = TRUE)
+}
+
+crime_sql <- "
+SELECT *
+FROM incidents_part1_part2
+WHERE dispatch_date_time >= '2024-01-01'
+  AND dispatch_date_time <  '2025-01-01'
+LIMIT 50000
+"
+
+crime <- read_carto_geojson(crime_sql)
+
+nrow(crime)
+st_crs(crime)
+
+```
+
+```{r}
+st_crs(crime)
+st_crs(schools)
+st_crs(bike)
+
+target_crs <- 2272
+
+crime   <- st_transform(crime, target_crs)
+schools <- st_transform(schools, target_crs)
+bike    <- st_transform(bike, target_crs)
+
+nrow(schools)
+nrow(crime)
+nrow(bike)
+
+```
+
+
+**Questions to answer:**
+- What dataset did you choose and why?
+Schools, crime incidents, and bike network to evaluate safety exposure and infrastructure coverage
+- What is the data source and date?
+OpenDataPhilly, 2024-2025
+- How many features does it contain?
+schools 490, crime 50000, bike 5225
+- What CRS is it in? Did you need to transform it?
+yes, I transformed to 2272
+
+---
+
+2. **Pose a research question**
+
+Write a clear research statement that your analysis will answer.
+
+Are Philadelphia school zones (within 1,000 feet of schools) exposed to high crime activity, and do these zones have adequate bike infrastructure coverage to support safe walking and biking?
+
+---
+
+3. **Conduct spatial analysis**
+
+Use at least TWO spatial operations to answer your research question.
+
+**Required operations (choose 2+):**
+- Buffers
+- Spatial joins
+- Spatial filtering with predicates
+- Distance calculations
+- Intersections or unions
+- Point-in-polygon aggregation
+
+**Your Task:**
+```{r}
+# Your spatial analysis
+# Create 1000 ft safety zone around schools
+school_buffer <- st_buffer(schools, dist = 1000)
+
+# Spatial join crime points into buffers
+crime_in_buffers <- st_join(school_buffer, crime, join = st_intersects)
+
+# Count crimes per school zone
+crime_summary <- crime_in_buffers %>%
+  group_by(school_nam) %>%
+  summarise(crime_count = n())
+
+#Intersect bike network with school buffers.
+bike_in_buffers <- st_intersection(bike, school_buffer)
+
+# Calculate total bike lane length inside safety zones
+bike_length <- bike_in_buffers %>%
+  mutate(length_ft = st_length(geometry)) %>%
+  summarise(total_bike_ft = sum(length_ft))
+
+```
+
+```{r}
+crime_near_schools <- crime[st_intersects(crime, st_union(school_buffer), sparse = FALSE), ]
+
+#Map
+ggplot() +
+  geom_sf(data = school_buffer, aes(fill = "School safety zone (1000 ft)"),
+          alpha = 0.15, color = NA) +
+  geom_sf(data = bike, aes(color = "Bike network"),
+          linewidth = 0.4) +
+  geom_sf(data = crime_near_schools, aes(color = "Crime incident"),
+          alpha = 0.35, size = 0.5) +
+  geom_sf(data = schools, aes(color = "School"),
+          size = 0.9) +
+  scale_color_manual(
+    name = NULL,
+    values = c("Bike network" = "green",
+               "Crime incident" = "red",
+               "School" = "black")
+  ) +
+  scale_fill_manual(
+    name = NULL,
+    values = c("School safety zone (1000 ft)" = "purple")
+  ) +
+  theme_minimal() +
+  labs(
+    title = "School Safety Zones (1000 ft)",
+    subtitle = "Crime incidents and bike network coverage near schools"
+  )
+
+```
+```{r}
+
+#rank schools by crime inside 1000 ft
+crime_join <- st_join(school_buffer, crime, join = st_intersects)
+
+crime_by_school <- crime_join %>%
+  st_drop_geometry() %>%
+  group_by(school_nam) %>%     
+  summarise(crime_count = n())
+
+# join counts back onto buffer geometry
+school_buffer2 <- school_buffer %>%
+  left_join(crime_by_school, by = "school_nam") %>%
+  mutate(crime_count = ifelse(is.na(crime_count), 0, crime_count))
+
+```
+
+```{r}
+#Create crime exposure categories using distribution-based cutoffs
+summary(school_buffer2$crime_count)
+quantile(school_buffer2$crime_count,
+         probs = c(0, .25, .5, .75, .9, 1),
+         na.rm = TRUE)
+school_buffer2 <- school_buffer2 %>%
+  mutate(crime_level = case_when(
+    crime_count >= 140 ~ "Very high",
+    crime_count >= 98 ~ "High",
+    crime_count >= 55 ~ "Moderate",
+    TRUE ~ "Low"
+  ))
+
+```
+
+
+```{r}
+#Hotspot map
+ggplot() +
+  geom_sf(data = school_buffer2, aes(fill = crime_level),
+          color = NA, alpha = 0.75) +
+  geom_sf(data = bike, color = "azure4", linewidth = 0.35) +
+  geom_sf(data = schools, color = "black", size = 0.6) +
+  theme_void() +
+  labs(
+    title = "Crime Exposure Within 1000 ft of Schools",
+    subtitle = "School safety zones grouped by crime exposure; bike network shown in grey",
+    fill = "Crime level"
+  )
+
+```
+
+
+**Analysis requirements:**
+- Clear code comments explaining each step
+- Appropriate CRS transformations
+- Summary statistics or counts
+- At least one map showing your findings
+- Brief interpretation of results (3-5 sentences)
+
+**Your interpretation:**
+
+Crime exposure within 1,000 feet of schools varies substantially across Philadelphia. The majority of school safety zones, according to distribution-based thresholds, are classified as having low to moderate crime rates, but a smaller subset exhibits high or extremely high incident counts, suggesting concentrated hotspots. The coverage of bike networks varies by school zone, and there is a lack of bike infrastructure or it is dispersed in some high-crime regions. These findings imply that focused safety interventions, like improved corridors and crossing-support initiatives, should be given priority in Safe Routes to School initiatives for schools with high criminal exposure and little bike network presence.
+
+
+## Finally - A few comments about your incorporation of feedback!
+Take a few moments to clean up your markdown document and then write a line or two or three about how you may have incorporated feedback that you recieved after your first assignment. 
+
+I revised the file to remove excess instructional text I also learned how to suppress unnecessary datasets and data tables in the output, which improved readability and made the final page cleaner and more professional.
+
+---
+
