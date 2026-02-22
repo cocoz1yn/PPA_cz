@@ -46,7 +46,10 @@ Load the required spatial data:
 - Pennsylvania census tracts
 
 **Your Task:**
-```{r load_data, message=FALSE, warning=FALSE}
+```{r}
+#| message: false
+#| warning: false
+#| results: 'hide'
 # Load required packages
 library(sf)
 library(tidyverse)
@@ -94,6 +97,10 @@ Use `tidycensus` to download tract-level demographic data for Pennsylvania.
 
 **Your Task:**
 ```{r}
+#| message: false
+#| warning: false
+#| results: 'hide'
+
 # Get demographic data from ACS
 library(dplyr)
 library(tidyr)
@@ -161,7 +168,7 @@ Identify census tracts with vulnerable populations based on TWO criteria:
 2. Significant elderly population (choose an appropriate threshold)
 
 **Your Task:**
-```{r}
+```{r, message=FALSE, warning=FALSE, results: 'hide'}
 # Filter for vulnerable tracts based on your criteria
 pa_tracts_demo <- pa_tracts_demo %>%
   mutate(
@@ -679,6 +686,10 @@ Choose ONE of the following challenge exercises, or propose your own research qu
    - Provide basic summary statistics
 
 ```{r load_packages, message=FALSE, warning=FALSE}
+#| message: false
+#| warning: false
+#| results: 'hide'
+
 # Load your additional dataset
 library(ggplot2)
 library(httr)
@@ -710,6 +721,10 @@ st_crs(crime)
 ```
 
 ```{r}
+#| message: false
+#| warning: false
+#| results: 'hide'
+
 st_crs(crime)
 st_crs(schools)
 st_crs(bike)
@@ -813,6 +828,7 @@ ggplot() +
   )
 
 ```
+
 ```{r}
 
 #rank schools by crime inside 1000 ft
