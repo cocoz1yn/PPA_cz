@@ -10,7 +10,6 @@ format:
     theme: cosmo
     embed-resources: true
 execute:
-  echo: false
   warning: false
   message: false
 ---
@@ -152,7 +151,6 @@ Overall, the resulting model incorporates a comprehensive set of property and en
 #| message: false
 #| warning: false
 #| results: 'hide'
-#| echo: false
 
 
 library(tidyverse)
@@ -191,7 +189,7 @@ Load primary data:
 #| message: false
 #| warning: false
 #| results: 'hide'
-#| echo: false
+
 # Load dataset
 opa <- read_sf("data/opa_properties_public.geojson")
 ```
@@ -202,7 +200,7 @@ Clean primary data:
 #| message: false
 #| warning: false
 #| results: 'hide'
-#| echo: false
+
 #filter residential data category code=1
 opa_res <- opa %>%
   filter(category_code == 1)
@@ -281,7 +279,6 @@ Load secondary data:
 #| message: false
 #| warning: false
 #| results: 'hide'
-#| echo: false
 
 #select Philadelphia census tracts, convert to PA South for mapping
 phl_tracts <- tracts(state = "PA", county = "Philadelphia", cb = TRUE, year = 2022) %>%
@@ -915,7 +912,7 @@ summary(opa_sf$vacant_300m)
 
 Finally, neighborhood physical conditions were represented by calculating the number of vacant properties within a 300-meter buffer around each home using the city’s vacant property dataset. Higher concentrations of vacant properties may indicate neighborhood disinvestment and can negatively influence surrounding property values.
 
-### Step 4 model building
+### Model building
 ```{r set models for training}
 #| message: false
 #| warning: false
@@ -1175,6 +1172,8 @@ summary(m5)
 
 For the fifth and final model, the fourth specification was further extended by adding census tract fixed effects through as.factor(census_tract). This final model retains all previously included structural, spatial, socioeconomic, non-linear, and interaction terms, while also controlling for unobserved tract-level characteristics that may systematically influence housing prices. By including a separate fixed effect for each census tract, the model accounts for localized neighborhood factors that are not directly measured by the other variables, such as tract-specific housing market conditions, built environment context, or other place-based influences. This final specification was intended to capture both property-level variation and broader neighborhood-level differences more completely. Among all five models, Model 5 produced the highest R².
 
+## Diagnostic plots
+
 ```{r}
 #10-fold CV
 set.seed(123)
@@ -1326,7 +1325,8 @@ ggplot(diagnostic_data, aes(x = 1:nrow(diagnostic_data), y = cooks_d)) +
 ```
 Most observations have very small Cook’s Distance values, suggesting that they do not strongly influence the fitted model. However, a small number of points stand out with noticeably higher Cook’s D values, indicating that a few observations may have a relatively strong influence on the regression results.
 
-###Key Findings & Recommendations
+## Conclusion & Interpretations
+
 Final model’s accuracy:
 Model 5 is the final and preferred model for prediction because it performs best among all five specifications. Its stronger performance suggests that location and tract-level differences are highly important in explaining variation in residential sale prices. At the same time, the diagnostic results indicate the presence of heteroskedasticity, non-normal residuals, and a small number of influential observations. As a result, while Model 5 provides the strongest overall predictive accuracy, its coefficient estimates should be interpreted carefully.
 
