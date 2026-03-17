@@ -31,7 +31,7 @@ March 14, 2026
 **Content:**
 
 -   Data Sources
--   Data Preperation & Cleaning
+-   Data Preparation & Cleaning
 -   Exploratory Data Analysis
 -   Feature Engineering
 -   Model Building
@@ -912,7 +912,8 @@ summary(opa_sf$vacant_300m)
 
 Finally, neighborhood physical conditions were represented by calculating the number of vacant properties within a 300-meter buffer around each home using the city’s vacant property dataset. Higher concentrations of vacant properties may indicate neighborhood disinvestment and can negatively influence surrounding property values.
 
-### Model building
+## Model building
+
 ```{r set models for training}
 #| message: false
 #| warning: false
