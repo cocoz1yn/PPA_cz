@@ -39,3 +39,4 @@ Thumbs.db
 /.quarto/
 **/*.quarto_ipynb
 labs/lab_3/data/opa_properties_public.geojson
+labs/lab_3/environment.RData
