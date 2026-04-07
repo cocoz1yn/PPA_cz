@@ -20,6 +20,8 @@ website:
             text: "Philadelphia Housing Price Prediction Technical Appendix"
           - href: labs/lab_3/Yang_Zheng_Zhong_Zhou_Presentation.qmd
             text: "Philadelphia Housing Price Prediction Slides" 
+          - href: labs/lab_4/lab4.qmd
+            text: "Lab 4"
 format:
   html:
     theme: cosmo
