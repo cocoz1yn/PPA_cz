@@ -652,7 +652,7 @@ p1 <- ggplot() +
 p2 <- ggplot() +
   geom_sf(data = fishnet, aes(fill = prediction_nb), color = NA) +
   scale_fill_viridis_c(name = "Predicted", option = "plasma", limits = c(0, 15)) +
-  labs(title = "Model Predictions (Neg. Binomial)") +
+  labs(title = "Predictions (Neg. Binomial)") +
   theme_crime()
 
 p3 <- ggplot() +
@@ -674,8 +674,6 @@ Compared with the KDE baseline, the regression model captures more local variati
  
 ## Compare Model (Temporally)
 ```{r}
-# Create three maps
-
 p4 <- ggplot() +
   geom_sf(data = fishnet2, aes(fill = countBurglaries), color = NA) +
   scale_fill_viridis_c(name = "Count", option = "plasma", limits = c(0, 15)) +
