@@ -40,6 +40,6 @@ Thumbs.db
 **/*.quarto_ipynb
 labs/lab_3/data/opa_properties_public.geojson
 labs/lab_3/environment.RData
+labs/lab_6/environment.RData
 labs/lab_6/.RDataTmp
 labs/lab_6/.RDataTmp1
-labs/lab_6/environment.RData

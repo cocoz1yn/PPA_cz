@@ -124,10 +124,6 @@
       margin-right: 0; 
     }
   </style>
-  <script src="../../site_libs/kePrint-0.0.1/kePrint.js"></script>
-
-  <link href="../../site_libs/lightable-0.0.1/lightable.css" rel="stylesheet">
-
 </head>
 <body class="quarto-light">
   <div class="reveal">
@@ -174,6 +170,10 @@ Coco Zhou, Parker Otto, Veronica Zheng, Zhuosi Yang
 <li><p><strong>Built environment &amp; service.</strong> OpenDataPhilly + <code>tigris</code>: schools, hospitals, colleges, parks, businesses, parcels, intersections, crashes, neighborhoods, rail/trolley stops, city boundary.</p></li>
 </ul>
 </section>
+<section id="current-bus-ridership" class="slide level2">
+<h2>Current Bus Ridership</h2>
+
+<img data-src="Figures/point data.png" style="width:35.0%" class="r-stretch"></section>
 <section id="how-we-built-each-stops-context" class="slide level2">
 <h2>How we built each stop’s “context”</h2>
 <ul>
@@ -203,57 +203,8 @@ Coco Zhou, Parker Otto, Veronica Zheng, Zhuosi Yang
 </section>
 <section id="model-performance-cross-validated" class="slide level2">
 <h2>Model performance (cross-validated)</h2>
-<div class="cell">
-<div class="cell-output-display">
-<table class="table table-striped table-hover table-condensed caption-top" style="font-size: 22px; width: auto !important; margin-left: auto; margin-right: auto;">
-<thead>
-<tr class="header">
-<th style="text-align: left;" data-quarto-table-cell-role="th">Model</th>
-<th style="text-align: right;" data-quarto-table-cell-role="th">Mean MAE</th>
-<th style="text-align: right;" data-quarto-table-cell-role="th">Mean RMSE</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">OLS 1: Base Demographic ACS Data</td>
-<td style="text-align: right;">65.80</td>
-<td style="text-align: right;">108.32</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">OLS 2: + Distance and Buffer Predictors</td>
-<td style="text-align: right;">67.09</td>
-<td style="text-align: right;">108.05</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">OLS 3: + Service Features</td>
-<td style="text-align: right;">64.85</td>
-<td style="text-align: right;">102.75</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">OLS 3.1: - Multicollinear Features</td>
-<td style="text-align: right;">64.28</td>
-<td style="text-align: right;">102.08</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">OLS 4: + Frequency FE</td>
-<td style="text-align: right;">61.79</td>
-<td style="text-align: right;">99.80</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">Poisson</td>
-<td style="text-align: right;">55.16</td>
-<td style="text-align: right;">97.22</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">Negative Binomial</td>
-<td style="text-align: right;">79.72</td>
-<td style="text-align: right;">205.66</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-<p><br></p>
+
+<img data-src="Figures/table.png" style="width:75.0%" class="r-stretch"><p><br></p>
 <div style="font-size:0.72em; line-height:1.25; margin-top:0.2em;">
 <p><strong>Poisson</strong> has the lowest cross-validated error (MAE ≈ 55, RMSE ≈ 97), so we use it as the main prediction model. It fits the outcome type well because weekday ridership is a non-negative count. We still interpret Poisson cautiously because the high dispersion parameter shows that ridership is more uneven than a standard Poisson model assumes. <strong>OLS 4</strong> is the strongest linear model (MAE ≈ 62, RMSE ≈ 100). Its performance improves after adding service frequency and neighborhood fixed effects, which capture service intensity and local place-based differences. This is the more conservative interpretation tool.</p>
 </div>
@@ -261,7 +212,7 @@ Coco Zhou, Parker Otto, Veronica Zheng, Zhuosi Yang
 <section id="where-the-model-is-strong-and-where-it-isnt" class="slide level2">
 <h2>Where the model is strong, and where it isn’t</h2>
 
-<img data-src="Predicting-SEPTA-Bus-Stop-Ridership-Slides_files/figure-revealjs/residual-map-slide-1.png" width="1056" class="r-stretch"><div style="font-size:0.72em; line-height:1.25; margin-top:0.2em;">
+<img data-src="Figures/residual-map-slide.png" style="width:60.0%" class="r-stretch"><div style="font-size:0.72em; line-height:1.25; margin-top:0.2em;">
 <p>Citywide, the tract-level average errors are relatively small. The <strong>Red</strong> areas indicate tracts where actual ridership was higher than the Poisson model predicted, suggesting that the model may be missing localized demand factors such as transfer activity, institutional destinations, or commercial corridors. The <strong>Blue</strong> areas indicate tracts where actual ridership was lower than predicted, which may reflect local conditions not fully captured by the model, such as weaker pedestrian access, stop placement issues, or service-quality differences.</p>
 </div>
 </section>
@@ -522,82 +473,6 @@ Coco Zhou, Parker Otto, Veronica Zheng, Zhuosi Yang
         ]
       });
     </script>
-    
-
-    <script>
-
-      // htmlwidgets need to know to resize themselves when slides are shown/hidden.
-
-      // Fire the "slideenter" event (handled by htmlwidgets.js) when the current
-
-      // slide changes (different for each slide format).
-
-      (function () {
-
-        // dispatch for htmlwidgets
-
-        function fireSlideEnter() {
-
-          const event = window.document.createEvent("Event");
-
-          event.initEvent("slideenter", true, true);
-
-          window.document.dispatchEvent(event);
-
-        }
-
-    
-
-        function fireSlideChanged(previousSlide, currentSlide) {
-
-          fireSlideEnter();
-
-    
-
-          // dispatch for shiny
-
-          if (window.jQuery) {
-
-            if (previousSlide) {
-
-              window.jQuery(previousSlide).trigger("hidden");
-
-            }
-
-            if (currentSlide) {
-
-              window.jQuery(currentSlide).trigger("shown");
-
-            }
-
-          }
-
-        }
-
-    
-
-        // hookup for slidy
-
-        if (window.w3c_slidy) {
-
-          window.w3c_slidy.add_observer(function (slide_num) {
-
-            // slide_num starts at position 1
-
-            fireSlideChanged(null, w3c_slidy.slides[slide_num - 1]);
-
-          });
-
-        }
-
-    
-
-      })();
-
-    </script>
-
-    
-
     <script id="quarto-html-after-body" type="application/javascript">
       window.document.addEventListener("DOMContentLoaded", function (event) {
         const tabsets =  window.document.querySelectorAll(".panel-tabset-tabby")

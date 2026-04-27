@@ -13,24 +13,6 @@ format:
     smaller: true
 ---
 
-```{r setup, include=FALSE}
-#| message: false
-#| warning: false
-#| results: 'hide'
-
-# Run CPLN_5920_final.qmd first, then save.image("environment.RData")
-# in the project root so this slide deck can pick up the fitted
-# objects (dat, pois, ols4, cv_summary, tract_errors, ...).
-load("environment.RData")
-
-library(tidyverse)
-library(sf)
-library(scales)
-library(viridis)
-library(knitr)
-library(kableExtra)
-```
-
 ## The Problem
 
 - **Where should SEPTA invest in bus service?** The City and SEPTA have to decide where stop-level investments are justified, but lack a consistent way to estimate how much demand a candidate location is likely to serve.
@@ -62,6 +44,12 @@ library(kableExtra)
 
 - **Built environment & service.**
   OpenDataPhilly + `tigris`: schools, hospitals, colleges, parks, businesses, parcels, intersections, crashes, neighborhoods, rail/trolley stops, city boundary.
+
+---
+
+## Current Bus Ridership
+
+![](Figures/point data.png){width=35%}
 
 ---
 
@@ -122,16 +110,7 @@ library(kableExtra)
 
 ## Model performance (cross-validated)
 
-```{r cv-table-slide}
-#| echo: false
-#| warning: false
-#| message: false
-
-cv_summary %>%
-  kable(digits = 2, align = "lrr") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
-                full_width = FALSE, font_size = 22)
-```
+![](Figures/table.png){width=75%}
 
 <br>
 
@@ -143,36 +122,7 @@ cv_summary %>%
 
 ## Where the model is strong, and where it isn't
 
-```{r residual-map-slide}
-#| echo: false
-#| warning: false
-#| message: false
-#| fig-width: 11
-#| fig-height: 6.5
-
-ggplot() +
-  geom_sf(
-    data = tract_errors,
-    aes(fill = mean_error),
-    color = "white",
-    linewidth = 0.2
-  ) +
-  scale_fill_gradient2(
-    low = "#2C7BB6",
-    mid = "white",
-    high = "#D7191C",
-    midpoint = 0,
-    name = "Mean error\n(actual − predicted)",
-    labels = scales::comma,
-    na.value = "grey85"
-  ) +
-  labs(
-    title = "Tract-Level Average Prediction Error (Poisson)",
-    subtitle = "Red = underprediction; Blue = overprediction"
-  ) +
-  theme_void(base_size = 13) +
-  theme(legend.position = "right")
-```
+![](Figures/residual-map-slide.png){width=60%}
 
 <div style="font-size:0.72em; line-height:1.25; margin-top:0.2em;">
 Citywide, the tract-level average errors are relatively small. The **Red** areas indicate tracts where actual ridership was higher than the Poisson model predicted, suggesting that the model may be missing localized demand factors such as transfer activity, institutional destinations, or commercial corridors. The **Blue** areas indicate tracts where actual ridership was lower than predicted, which may reflect local conditions not fully captured by the model, such as weaker pedestrian access, stop placement issues, or service-quality differences.
