@@ -24,7 +24,7 @@ website:
             text: "Lab 4"
           - href: labs/lab_5/lab5.qmd
             text: "Lab 5"
-          - href: labs/lab_6/lab6.qmd
+          - href: labs/lab_6/lab6.1.qmd
             text: "Predicting SEPTA Bus Stop Ridership Technical Appendix"
           - href: labs/lab_6/Predicting SEPTA Bus Stop Ridership Slides.qmd
             text: "Predicting SEPTA Bus Stop Ridership Slides"
